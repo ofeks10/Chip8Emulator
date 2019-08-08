@@ -115,6 +115,7 @@ impl Opcode {
                 let vx = cpu.v[self.get_x_value()] as u16;
                 let val = self.get_lower_byte() as u16;
                 let result = vx + val;
+                println!("Adding {} to {}, result is {}", vx, val, result & 0xFF);
                 cpu.v[self.get_x_value()] = result as u8;
             },
 
@@ -221,9 +222,7 @@ impl Opcode {
 
             0xA1 => { // SKNP Vx
                 if cpu.keyboard.keys_array[self.get_x_value()] == false {
-                    println!("Before: {:?}", cpu.pc);
                     cpu.pc += std::mem::size_of::<Opcode>();
-                    println!("After: {:?}", cpu.pc);
                 }
             },
 
@@ -233,32 +232,42 @@ impl Opcode {
 
     fn handle_0xf000_opcode(&self, cpu: &mut Cpu) {
         match self.opcode & 0xFF {
-            0x07 => cpu.v[self.get_nibble(1)] = cpu.timer.timer_value, 
+            0x07 => {
+                cpu.v[self.get_x_value()] = cpu.timer.timer_value
+            },
 
             0x0A => loop {  }, 
 
-            0x15 => cpu.timer.timer_value = cpu.v[self.get_nibble(1)], 
+            0x15 => {
+                cpu.timer.timer_value = cpu.v[self.get_x_value()]
+            }, 
 
-            0x18 => cpu.timer_for_sound.timer_value = cpu.v[self.get_nibble(1)],
+            0x18 => {
+                cpu.timer_for_sound.timer_value = cpu.v[self.get_x_value()]
+            },
             
-            0x1E => cpu.i = cpu.v[self.get_nibble(1)] as usize,
+            0x1E => {
+                cpu.i = cpu.i + cpu.v[self.get_x_value()] as usize
+            },
 
-            0x29 => cpu.i = (cpu.v[self.get_nibble(1)] as usize) * 5,
+            0x29 => {
+                cpu.i = (cpu.v[self.get_x_value()] as usize) * 5
+            },
 
             0x33 => {
-                cpu.memory[cpu.i] = cpu.v[self.get_nibble(1)] / 100;
-                cpu.memory[cpu.i + 1] = (cpu.v[self.get_nibble(1)] / 10) % 10;
-                cpu.memory[cpu.i + 2] = (cpu.v[self.get_nibble(1)] % 100) % 10;
+                cpu.memory[cpu.i] = cpu.v[self.get_x_value()] / 100;
+                cpu.memory[cpu.i + 1] = (cpu.v[self.get_x_value()] / 10) % 10;
+                cpu.memory[cpu.i + 2] = (cpu.v[self.get_x_value()] % 100) % 10;
             },
 
             0x55 => {
-                for reg_index in 0..self.get_nibble(1) {
+                for reg_index in 0..self.get_x_value() {
                     cpu.memory[cpu.i + reg_index] = cpu.v[reg_index];
                 }
             },
 
             0x65 => {
-                for reg_index in 0..self.get_nibble(1) {
+                for reg_index in 0..self.get_x_value() {
                     cpu.v[reg_index] = cpu.memory[cpu.i + reg_index];
                 }
             },
@@ -299,12 +308,12 @@ impl Cpu {
     fn get_next_opcode(&mut self) -> Opcode {
         let opcode: u16 = (self.memory[self.pc] as u16) << 8 | (self.memory[self.pc + 1] as u16);
         let op = Opcode::new(opcode);
+        self.pc += 2;
         op
     }
 
     fn run_next_opcode(&mut self) {
         let opcode: Opcode = self.get_next_opcode();
-        self.pc += 2;
         opcode.execute_opcode(self);
     }
 
