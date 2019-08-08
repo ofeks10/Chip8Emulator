@@ -3,6 +3,8 @@ extern crate rand;
 use crate::display::{Display, DISPLAY_WIDTH, DISPLAY_HEIGHT};
 use crate::cartridge::Cartridge;
 use crate::timer::Timer;
+use crate::keyboard::Keyboard;
+use crate::sound::Sound;
 use rand::Rng;
 
 const LETTERS_SPRITES: [u8; 80] = [
@@ -32,6 +34,8 @@ pub struct Cpu {
     display: Display,
     timer_for_sound: Timer,
     timer: Timer,
+    keyboard: Keyboard,
+    sound_device: Sound,
 }
 
 struct Opcode {
@@ -108,7 +112,10 @@ impl Opcode {
             },
 
             0x7000 => { // ADD Vx, byte
-                cpu.v[self.get_x_value()] += self.get_lower_byte();
+                let vx = cpu.v[self.get_x_value()] as u16;
+                let val = self.get_lower_byte() as u16;
+                let result = vx + val;
+                cpu.v[self.get_x_value()] = result as u8;
             },
 
             0x8000 => self.handle_0x8000_opcode(cpu),
@@ -212,8 +219,12 @@ impl Opcode {
                 panic!("Unimplmented keyboard 0x9E");
             },
 
-            0xA1 => {
-                panic!("Unimplmented keyboard 0xA1");
+            0xA1 => { // SKNP Vx
+                if cpu.keyboard.keys_array[self.get_x_value()] == false {
+                    println!("Before: {:?}", cpu.pc);
+                    cpu.pc += std::mem::size_of::<Opcode>();
+                    println!("After: {:?}", cpu.pc);
+                }
             },
 
             _ => panic!("Invalid opcode {:x}", self.opcode),
@@ -259,6 +270,7 @@ impl Opcode {
 
 impl Cpu {
     pub fn new(cartridge: &Cartridge) -> Cpu {
+        let ctx = sdl2::init().unwrap();
         let mut cpu = Cpu {
             v: [0; 0x10],
             i: 0,
@@ -266,9 +278,11 @@ impl Cpu {
             sp: 0,
             stack: [0; STACK_SIZE],
             memory: [0; RAM_SIZE],
-            display: Display::new(),
-            timer_for_sound: Timer::new(Cpu::beep),
+            display: Display::new(&ctx),
+            timer_for_sound: Timer::new_without_callback(),
             timer: Timer::new_without_callback(),
+            keyboard: Keyboard::new(&ctx),
+            sound_device: Sound::new(&ctx),
         };
 
         for i in 0..cartridge.size {
@@ -282,26 +296,37 @@ impl Cpu {
         cpu
     }
 
-    fn beep() {
-        panic!("No beep yet");
-    }
-
     fn get_next_opcode(&mut self) -> Opcode {
         let opcode: u16 = (self.memory[self.pc] as u16) << 8 | (self.memory[self.pc + 1] as u16);
-        self.pc += 2;
         let op = Opcode::new(opcode);
-        println!("running opcode {:x} at pc {:x}", op.opcode, self.pc - 2);
         op
     }
 
     fn run_next_opcode(&mut self) {
         let opcode: Opcode = self.get_next_opcode();
+        self.pc += 2;
         opcode.execute_opcode(self);
     }
 
+    fn print_everything(&mut self) {
+        println!("Registers:\n{:?}", self.v);
+        println!("PC:\t{:?}", self.pc);
+        println!("SP:\t{:?}", self.sp);
+    }
+
     pub fn tick(&mut self) {
+        self.keyboard.update_keys();
         self.run_next_opcode();
+
         self.timer.tick();
+
+        if self.timer_for_sound.timer_value > 0 {
+            println!("timer_for_sound value is {}", self.timer_for_sound.timer_value);
+            self.sound_device.start_beep();
+        } else { 
+            self.sound_device.stop_beep();
+        }
+
         self.timer_for_sound.tick();
 
         if self.display.should_render {

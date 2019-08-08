@@ -1,5 +1,6 @@
 extern crate sdl2;
 use sdl2::pixels;
+use sdl2::Sdl;
 use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
@@ -19,8 +20,7 @@ struct DisplayDriver {
 }
 
 impl DisplayDriver {
-    fn new() -> DisplayDriver {
-        let ctx = sdl2::init().unwrap();
+    fn new(ctx: &Sdl) -> DisplayDriver {
         let mut canvas = ctx.video().unwrap()
 			.window("Ofek's Chip8 Emulator", (DISPLAY_WIDTH * PIXEL_DENSITY) as u32, (DISPLAY_HEIGHT * PIXEL_DENSITY) as u32)
 			.position_centered()
@@ -64,11 +64,11 @@ impl DisplayDriver {
 }
 
 impl Display {
-    pub fn new() -> Display {
+    pub fn new(ctx: &Sdl) -> Display {
         Display {
             vram: [[0; DISPLAY_WIDTH]; DISPLAY_HEIGHT],
             should_render: false,
-            driver: DisplayDriver::new(),
+            driver: DisplayDriver::new(ctx),
         }
     }
 

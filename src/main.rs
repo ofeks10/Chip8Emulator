@@ -3,6 +3,8 @@ mod cartridge;
 mod cpu;
 mod display;
 mod timer;
+mod keyboard;
+mod sound;
 
 use std::{thread, time};
 
@@ -12,6 +14,6 @@ fn main() {
 
     loop {
         cpu.tick();
-        thread::sleep(time::Duration::from_micros(1667));
+        thread::sleep(time::Duration::from_micros(2000));
     }
 }
