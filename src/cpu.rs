@@ -84,7 +84,6 @@ impl Opcode {
 
             0x2000 => { // CALL addr
                 cpu.stack[cpu.sp] = cpu.pc;
-                println!("inserted to stack: {:x}", cpu.stack[cpu.sp]);
                 cpu.sp += 1;
                 cpu.pc = self.get_address();
             },
@@ -115,7 +114,6 @@ impl Opcode {
                 let vx = cpu.v[self.get_x_value()] as u16;
                 let val = self.get_lower_byte() as u16;
                 let result = vx + val;
-                println!("Adding {} to {}, result is {}", vx, val, result & 0xFF);
                 cpu.v[self.get_x_value()] = result as u8;
             },
 
@@ -217,7 +215,9 @@ impl Opcode {
     fn handle_0xe000_opcode(&self, cpu: &mut Cpu) {
         match self.opcode & 0x00FF {
             0x9E => {
-                panic!("Unimplmented keyboard 0x9E");
+                if cpu.keyboard.keys_array[self.get_x_value()] == true {
+                    cpu.pc += std::mem::size_of::<Opcode>();
+                }
             },
 
             0xA1 => { // SKNP Vx
@@ -247,7 +247,8 @@ impl Opcode {
             },
             
             0x1E => {
-                cpu.i = cpu.i + cpu.v[self.get_x_value()] as usize
+                cpu.i += cpu.v[self.get_x_value()] as usize;
+                cpu.v[0xF] = if cpu.i > 0xF00 { 1 } else { 0 };
             },
 
             0x29 => {
@@ -256,18 +257,18 @@ impl Opcode {
 
             0x33 => {
                 cpu.memory[cpu.i] = cpu.v[self.get_x_value()] / 100;
-                cpu.memory[cpu.i + 1] = (cpu.v[self.get_x_value()] / 10) % 10;
-                cpu.memory[cpu.i + 2] = (cpu.v[self.get_x_value()] % 100) % 10;
+                cpu.memory[cpu.i + 1] = (cpu.v[self.get_x_value()] % 100) / 10;
+                cpu.memory[cpu.i + 2] = cpu.v[self.get_x_value()] % 10;
             },
 
             0x55 => {
-                for reg_index in 0..self.get_x_value() {
+                for reg_index in 0..self.get_x_value() + 1 {
                     cpu.memory[cpu.i + reg_index] = cpu.v[reg_index];
                 }
             },
 
             0x65 => {
-                for reg_index in 0..self.get_x_value() {
+                for reg_index in 0..self.get_x_value() + 1 {
                     cpu.v[reg_index] = cpu.memory[cpu.i + reg_index];
                 }
             },
@@ -321,6 +322,7 @@ impl Cpu {
         println!("Registers:\n{:?}", self.v);
         println!("PC:\t{:?}", self.pc);
         println!("SP:\t{:?}", self.sp);
+        println!("I:\t{:?}", self.i);
     }
 
     pub fn tick(&mut self) {
@@ -330,7 +332,6 @@ impl Cpu {
         self.timer.tick();
 
         if self.timer_for_sound.timer_value > 0 {
-            println!("timer_for_sound value is {}", self.timer_for_sound.timer_value);
             self.sound_device.start_beep();
         } else { 
             self.sound_device.stop_beep();
