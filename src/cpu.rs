@@ -1,6 +1,6 @@
 extern crate rand;
 
-use crate::display::Display;
+use crate::display::{Display, DISPLAY_WIDTH, DISPLAY_HEIGHT};
 use crate::cartridge::Cartridge;
 use rand::Rng;
 
@@ -69,22 +69,6 @@ impl Opcode {
         self.get_nibble(2)
     }
 
-    fn handle_0x0000_opcode(&self, cpu: &mut Cpu) {
-        match self.opcode & 0x000F {
-            0x0 => {
-                // Clear display
-            },
-
-            0xE => { //
-                cpu.pc = cpu.stack[cpu.sp];
-                cpu.stack[cpu.sp] = 0;
-                cpu.sp -= 1;
-            },
-
-            _ => panic!("Invalid opcode {:?}", self.opcode),
-        }
-    }
-
     fn execute_opcode(&self, cpu: &mut Cpu) {
         match self.opcode & 0xF000 {
             0x0000 => self.handle_0x0000_opcode(cpu),
@@ -93,7 +77,7 @@ impl Opcode {
             },
 
             0x2000 => { // CALL addr
-                cpu.stack[cpu.pc] = cpu.pc + std::mem::size_of::<Opcode>();
+                cpu.stack[cpu.sp] = cpu.pc + std::mem::size_of::<Opcode>();
                 cpu.sp += 1;
                 cpu.pc = self.get_address();
             },
@@ -124,7 +108,7 @@ impl Opcode {
                 cpu.v[self.get_x_value()] += self.get_lower_byte();
             },
 
-            //0x8000 => self.handle_0x8000_opcode(cpu),
+            0x8000 => self.handle_0x8000_opcode(cpu),
             0x9000 => { //SNE Vx, Vy
                 if cpu.v[self.get_y_value()] != cpu.v[self.get_x_value()] {
                     cpu.pc += std::mem::size_of::<Opcode>();
@@ -139,16 +123,95 @@ impl Opcode {
                 cpu.pc = self.get_address() + cpu.v[0] as usize;
             },
 
-            0xC000 => { // RND Vx, byte -> Vx = random(0,255) & byte 
+            0xC000 => { // RND Vx, byte -> Vx = random(0->255) & byte 
                 let mut rng = rand::thread_rng();
                 cpu.v[self.get_x_value()] = rng.gen_range(0, 255) & self.get_lower_byte();
             },
 
-            // 0xD000 => { // Display stuff
-            // }
+            0xD000 => { // Display stuff
+                let x = self.get_x_value();
+                let y = self.get_y_value();
+                let n = self.get_n_value();
+                cpu.v[0xF] = 0;
+                for byte in 0..n {
+                    let y = (cpu.v[y] as usize + byte) % DISPLAY_HEIGHT;
+                    for bit in 0..8 {
+                        let x = (cpu.v[x] as usize + byte) % DISPLAY_WIDTH;
+                        let color = (cpu.memory[cpu.i + byte] >> (7 - bit)) & 1;
+                        cpu.v[0xF] |= color & cpu.display.vram[y][x];
+                        cpu.display.vram[y][x] ^= color;
+                    }
+                }
 
-            //0xE000 => self.handle_0xe000_opcode(cpu),
+                cpu.display.should_render = true;
+            }
+
+            0xE000 => self.handle_0xe000_opcode(cpu),
             //0xF000 => self.handle_0xf000_opcode(cpu),
+
+            _ => panic!("Invalid opcode {:x}", self.opcode),
+        }
+    }
+
+    fn handle_0x0000_opcode(&self, cpu: &mut Cpu) {
+        match self.opcode & 0x000F {
+            0x0 => {
+                // Clear display
+                cpu.display.clear();
+            },
+
+            0xE => { //
+                cpu.pc = cpu.stack[cpu.sp];
+                cpu.stack[cpu.sp] = 0;
+                cpu.sp -= 1;
+            },
+
+            _ => panic!("Invalid opcode {:?}", self.opcode),
+        }
+    }
+
+    fn handle_0x8000_opcode(&self, cpu: &mut Cpu) {
+        let x = self.get_x_value();
+        let y = self.get_y_value();
+        match self.opcode & 0x000F {
+            0x0 => cpu.v[x] = cpu.v[y],
+            0x1 => cpu.v[x] |= cpu.v[y],
+            0x2 => cpu.v[x] &= cpu.v[y],
+            0x3 => cpu.v[x] ^= cpu.v[y],
+            0x4 => {
+                let res = cpu.v[x] as u16 + cpu.v[y] as u16;
+                cpu.v[0xF] = if res > 0xFF { 1 } else { 0 };
+                cpu.v[x] = (res & 0x00FF) as u8
+            },
+            0x5 => {
+                cpu.v[0xF] = if cpu.v[x] > cpu.v[y] { 1 } else { 0 };
+                cpu.v[x] = cpu.v[x].wrapping_sub(cpu.v[y])
+            },
+            0x6 => {
+                cpu.v[0xF] = cpu.v[x] & 1;
+                cpu.v[x] >>= 1;
+            },
+            0x7 => {
+                cpu.v[0xF] = if cpu.v[x] < cpu.v[y] { 1 } else { 0 };
+                cpu.v[x] = cpu.v[y].wrapping_sub(cpu.v[x])
+            },
+            0xE => {
+                cpu.v[0xF] = cpu.v[x] >> 7;
+                cpu.v[x] <<= 1;
+            },
+            _ => panic!("Invalid opcode {:?}", self.opcode),
+        }
+    }
+
+    fn handle_0xe000_opcode(&self, cpu: &mut Cpu) {
+        match self.opcode & 0x00FF {
+            0x9E => {
+                panic!("Unimplmented keyboard 0x9E");
+            },
+
+            0xA1 => {
+                panic!("Unimplmented keyboard 0xA1");
+            },
 
             _ => panic!("Invalid opcode {:?}", self.opcode),
         }
@@ -176,5 +239,24 @@ impl Cpu {
         }
 
         cpu
+    }
+
+    fn get_next_opcode(&mut self) -> Opcode {
+        let opcode: u16 = (self.memory[self.pc] as u16) << 8 | self.memory[self.pc + 1] as u16;
+        self.pc += 2;
+        Opcode::new(opcode)
+    }
+
+    fn run_next_opcode(&mut self) {
+        let opcode: Opcode = self.get_next_opcode();
+        opcode.execute_opcode(self);
+    }
+
+    pub fn tick(&mut self) {
+        self.run_next_opcode();
+
+        if self.display.should_render {
+            self.display.render();
+        }
     }
 }

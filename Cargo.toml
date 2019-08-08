@@ -1,5 +1,5 @@
 [package]
-name = "chip_8_emulator"
+name = "Chip8Emulator"
 version = "0.1.0"
 authors = ["Ofek Shiffman <ofeks10@gmail.com>"]
 edition = "2018"
@@ -8,4 +8,8 @@ edition = "2018"
 
 [dependencies]
 rand = "*"
-sdl2 = "0.3.0"
+
+[dependencies.sdl2]
+version = "0.30"
+default-features = false
+features = ["gfx"]
