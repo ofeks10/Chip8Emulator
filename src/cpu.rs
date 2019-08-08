@@ -241,6 +241,7 @@ impl Opcode {
                     cpu.keyboard.update_keys();
                     for i in 0..cpu.keyboard.keys_array.len() {
                         if cpu.keyboard.keys_array[i] == true {
+                            cpu.v[self.get_x_value()] = i as u8;
                             return;
                         }
                     }
