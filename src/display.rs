@@ -6,7 +6,7 @@ use sdl2::video::Window;
 
 pub const DISPLAY_WIDTH: usize = 64;
 pub const DISPLAY_HEIGHT: usize = 32;
-const PIXEL_DENSITY: usize = 15;
+const PIXEL_DENSITY: usize = 20;
 
 pub struct Display {
     pub vram: [[u8; DISPLAY_WIDTH]; DISPLAY_HEIGHT],
@@ -53,8 +53,9 @@ impl DisplayDriver {
                 };
 
                 self.canvas.set_draw_color(draw_color);
-                self.canvas.fill_rect(Rect::new(x as i32, y as i32, PIXEL_DENSITY as u32, PIXEL_DENSITY as u32))
-                .expect("Could not draw to screen");
+                self.canvas
+                    .fill_rect(Rect::new(x as i32, y as i32, PIXEL_DENSITY as u32, PIXEL_DENSITY as u32))
+                    .expect("Could not draw to screen");
             }
         }
 

@@ -2,6 +2,7 @@ extern crate rand;
 
 use crate::display::{Display, DISPLAY_WIDTH, DISPLAY_HEIGHT};
 use crate::cartridge::Cartridge;
+use crate::timer::Timer;
 use rand::Rng;
 
 const LETTERS_SPRITES: [u8; 80] = [
@@ -28,8 +29,9 @@ pub struct Cpu {
     sp: usize,
     stack: [usize; STACK_SIZE],
     memory: [u8; RAM_SIZE],
-    // Add timer, display and sound here
     display: Display,
+    timer_for_sound: Timer,
+    timer: Timer,
 }
 
 struct Opcode {
@@ -77,7 +79,8 @@ impl Opcode {
             },
 
             0x2000 => { // CALL addr
-                cpu.stack[cpu.sp] = cpu.pc + std::mem::size_of::<Opcode>();
+                cpu.stack[cpu.sp] = cpu.pc;
+                println!("inserted to stack: {:x}", cpu.stack[cpu.sp]);
                 cpu.sp += 1;
                 cpu.pc = self.get_address();
             },
@@ -136,7 +139,7 @@ impl Opcode {
                 for byte in 0..n {
                     let y = (cpu.v[y] as usize + byte) % DISPLAY_HEIGHT;
                     for bit in 0..8 {
-                        let x = (cpu.v[x] as usize + byte) % DISPLAY_WIDTH;
+                        let x = (cpu.v[x] as usize + bit) % DISPLAY_WIDTH;
                         let color = (cpu.memory[cpu.i + byte] >> (7 - bit)) & 1;
                         cpu.v[0xF] |= color & cpu.display.vram[y][x];
                         cpu.display.vram[y][x] ^= color;
@@ -147,7 +150,7 @@ impl Opcode {
             }
 
             0xE000 => self.handle_0xe000_opcode(cpu),
-            //0xF000 => self.handle_0xf000_opcode(cpu),
+            0xF000 => self.handle_0xf000_opcode(cpu),
 
             _ => panic!("Invalid opcode {:x}", self.opcode),
         }
@@ -160,10 +163,10 @@ impl Opcode {
                 cpu.display.clear();
             },
 
-            0xE => { //
+            0xE => {
+                cpu.sp -= 1;
                 cpu.pc = cpu.stack[cpu.sp];
                 cpu.stack[cpu.sp] = 0;
-                cpu.sp -= 1;
             },
 
             _ => panic!("Invalid opcode {:?}", self.opcode),
@@ -213,7 +216,43 @@ impl Opcode {
                 panic!("Unimplmented keyboard 0xA1");
             },
 
-            _ => panic!("Invalid opcode {:?}", self.opcode),
+            _ => panic!("Invalid opcode {:x}", self.opcode),
+        }
+    }
+
+    fn handle_0xf000_opcode(&self, cpu: &mut Cpu) {
+        match self.opcode & 0xFF {
+            0x07 => cpu.v[self.get_nibble(1)] = cpu.timer.timer_value, 
+
+            0x0A => loop {  }, 
+
+            0x15 => cpu.timer.timer_value = cpu.v[self.get_nibble(1)], 
+
+            0x18 => cpu.timer_for_sound.timer_value = cpu.v[self.get_nibble(1)],
+            
+            0x1E => cpu.i = cpu.v[self.get_nibble(1)] as usize,
+
+            0x29 => cpu.i = (cpu.v[self.get_nibble(1)] as usize) * 5,
+
+            0x33 => {
+                cpu.memory[cpu.i] = cpu.v[self.get_nibble(1)] / 100;
+                cpu.memory[cpu.i + 1] = (cpu.v[self.get_nibble(1)] / 10) % 10;
+                cpu.memory[cpu.i + 2] = (cpu.v[self.get_nibble(1)] % 100) % 10;
+            },
+
+            0x55 => {
+                for reg_index in 0..self.get_nibble(1) {
+                    cpu.memory[cpu.i + reg_index] = cpu.v[reg_index];
+                }
+            },
+
+            0x65 => {
+                for reg_index in 0..self.get_nibble(1) {
+                    cpu.v[reg_index] = cpu.memory[cpu.i + reg_index];
+                }
+            },
+
+            _ => panic!("Invalid opcode {:x}", self.opcode),
         }
     }
 }
@@ -228,6 +267,8 @@ impl Cpu {
             stack: [0; STACK_SIZE],
             memory: [0; RAM_SIZE],
             display: Display::new(),
+            timer_for_sound: Timer::new(Cpu::beep),
+            timer: Timer::new_without_callback(),
         };
 
         for i in 0..cartridge.size {
@@ -241,10 +282,16 @@ impl Cpu {
         cpu
     }
 
+    fn beep() {
+        panic!("No beep yet");
+    }
+
     fn get_next_opcode(&mut self) -> Opcode {
-        let opcode: u16 = (self.memory[self.pc] as u16) << 8 | self.memory[self.pc + 1] as u16;
+        let opcode: u16 = (self.memory[self.pc] as u16) << 8 | (self.memory[self.pc + 1] as u16);
         self.pc += 2;
-        Opcode::new(opcode)
+        let op = Opcode::new(opcode);
+        println!("running opcode {:x} at pc {:x}", op.opcode, self.pc - 2);
+        op
     }
 
     fn run_next_opcode(&mut self) {
@@ -254,6 +301,8 @@ impl Cpu {
 
     pub fn tick(&mut self) {
         self.run_next_opcode();
+        self.timer.tick();
+        self.timer_for_sound.tick();
 
         if self.display.should_render {
             self.display.render();

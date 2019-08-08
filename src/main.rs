@@ -1,6 +1,8 @@
+#[allow(non_snake_case)]
 mod cartridge;
 mod cpu;
 mod display;
+mod timer;
 
 use std::{thread, time};
 
@@ -10,6 +12,6 @@ fn main() {
 
     loop {
         cpu.tick();
-        thread::sleep(time::Duration::from_millis(2));
+        thread::sleep(time::Duration::from_micros(1667));
     }
 }
