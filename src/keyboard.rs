@@ -28,11 +28,24 @@ impl Keyboard {
                     self.keys_array[0] = true;
                 },
 
+                Event::KeyDown {
+		            keycode: Some(Keycode::Up), .. 
+                } => {
+                    self.keys_array[1] = true;
+                },
+
                 Event::KeyUp {
                     keycode: Some(Keycode::Down), ..
                 } => {
                     self.keys_array[0] = false;
                 },
+
+                Event::KeyUp {
+                    keycode: Some(Keycode::Up), ..
+                } => {
+                    self.keys_array[1] = false;
+                },
+
 
                 Event::Quit { .. } => {
                     std::process::exit(0);
@@ -42,6 +55,6 @@ impl Keyboard {
             }
         }
 
-        //println!("keyboard keys: {:?}", self.keys_array);
+        println!("keyboard keys: {:?}", self.keys_array);
     }
 }

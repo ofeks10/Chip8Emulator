@@ -236,7 +236,16 @@ impl Opcode {
                 cpu.v[self.get_x_value()] = cpu.timer.timer_value
             },
 
-            0x0A => loop {  }, 
+            0x0A => {
+                loop {  
+                    cpu.keyboard.update_keys();
+                    for i in 0..cpu.keyboard.keys_array.len() {
+                        if cpu.keyboard.keys_array[i] == true {
+                            return;
+                        }
+                    }
+                }
+            }, 
 
             0x15 => {
                 cpu.timer.timer_value = cpu.v[self.get_x_value()]
@@ -315,6 +324,7 @@ impl Cpu {
 
     fn run_next_opcode(&mut self) {
         let opcode: Opcode = self.get_next_opcode();
+        self.print_everything();
         opcode.execute_opcode(self);
     }
 
