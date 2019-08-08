@@ -1,5 +1,6 @@
 extern crate rand;
 
+use crate::display::Display;
 use crate::cartridge::Cartridge;
 use rand::Rng;
 
@@ -28,6 +29,7 @@ pub struct Cpu {
     stack: [usize; STACK_SIZE],
     memory: [u8; RAM_SIZE],
     // Add timer, display and sound here
+    display: Display,
 }
 
 struct Opcode {
@@ -85,7 +87,7 @@ impl Opcode {
 
     fn execute_opcode(&self, cpu: &mut Cpu) {
         match self.opcode & 0xF000 {
-            //0x0000 => self.handle_0x0000_opcode(cpu),
+            0x0000 => self.handle_0x0000_opcode(cpu),
             0x1000 => { // JP addr
                 cpu.pc = self.get_address()
             },
@@ -161,7 +163,8 @@ impl Cpu {
             pc: START_OF_PROGRAM,
             sp: 0,
             stack: [0; STACK_SIZE],
-            memory: [0; RAM_SIZE]
+            memory: [0; RAM_SIZE],
+            display: Display::new(),
         };
 
         for i in 0..cartridge.size {
